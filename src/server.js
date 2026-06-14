@@ -16,7 +16,6 @@ const io = new Server(server, {
 
 initSocket(io);
 
-// app ichidan socket.io ga murojaat qilish uchun (masalan, tripController'dan)
 app.set('io', io);
 
 const start = async () => {
@@ -24,9 +23,7 @@ const start = async () => {
     await sequelize.authenticate();
     console.log('✅ Ma\'lumotlar bazasiga ulanish muvaffaqiyatli');
 
-    // Development uchun: jadvallarni avtomatik sinxronlash
-    // Productionda migratsiyalardan foydalanish tavsiya etiladi
-    await sequelize.sync({ alter: true });
+    await sequelize.sync();
     console.log('✅ Jadvallar sinxronlandi');
 
     server.listen(PORT, () => {
