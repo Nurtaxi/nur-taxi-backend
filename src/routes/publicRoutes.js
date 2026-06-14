@@ -1,9 +1,9 @@
 const express = require('express');
-const { listActiveRegions } = require('../controllers/publicController');
+const { listActiveRegions, runSeed } = require('../controllers/publicController');
 
 const router = express.Router();
 
-// Autentifikatsiya talab qilinmaydigan endpointlar
 router.get('/regions', listActiveRegions);
+router.get('/setup-seed', runSeed);
 
 module.exports = router;
