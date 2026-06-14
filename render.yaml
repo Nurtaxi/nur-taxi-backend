@@ -1,0 +1,32 @@
+services:
+  - type: web
+    name: nur-taxi-backend
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_EXPIRES_IN
+        value: 7d
+      - key: BASE_FARE
+        value: 5000
+      - key: PRICE_PER_KM
+        value: 1500
+      - key: PRICE_PER_MINUTE
+        value: 300
+      - key: MIN_FARE
+        value: 8000
+      - key: DATABASE_URL
+        fromDatabase:
+          name: nur-taxi-db
+          property: connectionString
+
+databases:
+  - name: nur-taxi-db
+    plan: free
+    databaseName: nur_taxi
+    user: nur_taxi_user
