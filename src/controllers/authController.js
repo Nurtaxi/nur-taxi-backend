@@ -1,10 +1,6 @@
 const { User, Driver, Region, ROLES } = require('../models');
 const { generateToken } = require('../utils/jwt');
 
-/**
- * Mijoz ro'yxatdan o'tishi (ochiq, hammaga ruxsat)
- * POST /api/auth/register/client
- */
 const registerClient = async (req, res, next) => {
   try {
     const { fullName, phone, password } = req.body;
@@ -28,11 +24,6 @@ const registerClient = async (req, res, next) => {
   }
 };
 
-/**
- * Haydovchi ro'yxatdan o'tishi (ariza, "pending_approval" holatida boshlanadi,
- * hudud admini tasdiqlashi kerak)
- * POST /api/auth/register/driver
- */
 const registerDriver = async (req, res, next) => {
   try {
     const { fullName, phone, password, regionId, licenseNumber } = req.body;
@@ -71,10 +62,6 @@ const registerDriver = async (req, res, next) => {
   }
 };
 
-/**
- * Barcha rollar uchun umumiy login
- * POST /api/auth/login
- */
 const login = async (req, res, next) => {
   try {
     const { phone, password } = req.body;
@@ -100,10 +87,6 @@ const login = async (req, res, next) => {
   }
 };
 
-/**
- * Joriy foydalanuvchi ma'lumotlarini olish
- * GET /api/auth/me
- */
 const getMe = async (req, res, next) => {
   try {
     res.json({ success: true, data: req.user.toSafeJSON() });
@@ -112,4 +95,37 @@ const getMe = async (req, res, next) => {
   }
 };
 
-module.exports = { registerClient, registerDriver, login, getMe };
+const updateProfile = async (req, res, next) => {
+  try {
+    const { fullName } = req.body;
+
+    if (fullName) {
+      req.user.fullName = fullName;
+      await req.user.save();
+    }
+
+    res.json({ success: true, data: req.user.toSafeJSON() });
+  } catch (err) {
+    next(err);
+  }
+};
+
+const changePassword = async (req, res, next) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+
+    const isValid = await req.user.checkPassword(currentPassword);
+    if (!isValid) {
+      return res.status(400).json({ success: false, message: 'Joriy parol noto\'g\'ri' });
+    }
+
+    req.user.passwordHash = newPassword;
+    await req.user.save();
+
+    res.json({ success: true, message: 'Parol muvaffaqiyatli o\'zgartirildi' });
+  } catch (err) {
+    next(err);
+  }
+};
+
+module.exports = { registerClient, registerDriver, login, getMe, updateProfile, changePassword };
