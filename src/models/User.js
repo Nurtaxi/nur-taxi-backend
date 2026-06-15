@@ -2,23 +2,20 @@ const { DataTypes, Model } = require('sequelize');
 const bcrypt = require('bcryptjs');
 const sequelize = require('../config/database');
 
-// Tizimdagi barcha rollar
 const ROLES = {
-  CLIENT: 'client', // Mijoz (taxi chaqiruvchi)
-  DRIVER: 'driver', // Haydovchi
-  REGION_ADMIN: 'region_admin', // Hudud admini
-  SUPER_ADMIN: 'super_admin', // Bosh admin (glavni admin)
+  CLIENT: 'client',
+  DRIVER: 'driver',
+  REGION_ADMIN: 'region_admin',
+  SUPER_ADMIN: 'super_admin',
 };
 
 class User extends Model {
-  // Parolni tekshirish
   async checkPassword(password) {
     return bcrypt.compare(password, this.passwordHash);
   }
 
-  // JSON ga chiqarishda parolni yashirish
   toSafeJSON() {
-    const values = { ...this.get() };
+    const values = { ...this.get({ plain: true }) };
     delete values.passwordHash;
     return values;
   }
@@ -72,6 +69,11 @@ User.init(
       type: DataTypes.BOOLEAN,
       defaultValue: false,
       comment: 'Telefon raqami SMS orqali tasdiqlangan',
+    },
+    bonusBalance: {
+      type: DataTypes.DECIMAL(12, 2),
+      defaultValue: 0,
+      comment: 'Mijoz bonus balansi (har bir tugagan safardan 1% qo\'shiladi)',
     },
   },
   {
