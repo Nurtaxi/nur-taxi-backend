@@ -1,13 +1,12 @@
 const { DataTypes, Model } = require('sequelize');
 const sequelize = require('../config/database');
 
-// Safar holati hayot sikli
 const TRIP_STATUS = {
-  SEARCHING: 'searching', // Haydovchi qidirilmoqda
-  ACCEPTED: 'accepted', // Haydovchi qabul qildi, kelmoqda
-  ARRIVED: 'arrived', // Haydovchi mijoz oldida
-  ON_RIDE: 'on_ride', // Safar boshlandi
-  COMPLETED: 'completed', // Safar tugadi, to'lov qilindi
+  SEARCHING: 'searching',
+  ACCEPTED: 'accepted',
+  ARRIVED: 'arrived',
+  ON_RIDE: 'on_ride',
+  COMPLETED: 'completed',
   CANCELLED_BY_CLIENT: 'cancelled_by_client',
   CANCELLED_BY_DRIVER: 'cancelled_by_driver',
   NO_DRIVER_FOUND: 'no_driver_found',
@@ -29,7 +28,7 @@ Trip.init(
     },
     driverId: {
       type: DataTypes.UUID,
-      allowNull: true, // Haydovchi topilmaguncha bo'sh
+      allowNull: true,
       references: { model: 'drivers', key: 'id' },
     },
     regionId: {
@@ -42,16 +41,20 @@ Trip.init(
       defaultValue: TRIP_STATUS.SEARCHING,
     },
 
-    // Manzillar
     pickupLat: { type: DataTypes.DECIMAL(10, 7), allowNull: false },
     pickupLng: { type: DataTypes.DECIMAL(10, 7), allowNull: false },
     pickupAddress: { type: DataTypes.STRING, allowNull: true },
 
-    dropoffLat: { type: DataTypes.DECIMAL(10, 7), allowNull: false },
-    dropoffLng: { type: DataTypes.DECIMAL(10, 7), allowNull: false },
+    dropoffLat: { type: DataTypes.DECIMAL(10, 7), allowNull: true },
+    dropoffLng: { type: DataTypes.DECIMAL(10, 7), allowNull: true },
     dropoffAddress: { type: DataTypes.STRING, allowNull: true },
 
-    // Hisoblangan/haqiqiy ko'rsatkichlar
+    isDestinationPending: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: false,
+      comment: 'Mijoz manzilni tanlamasdan buyurtma bergan',
+    },
+
     estimatedDistanceKm: { type: DataTypes.DECIMAL(8, 2), allowNull: true },
     estimatedDurationMin: { type: DataTypes.DECIMAL(8, 2), allowNull: true },
     estimatedPrice: { type: DataTypes.DECIMAL(10, 2), allowNull: true },
@@ -60,7 +63,6 @@ Trip.init(
     actualDurationMin: { type: DataTypes.DECIMAL(8, 2), allowNull: true },
     finalPrice: { type: DataTypes.DECIMAL(10, 2), allowNull: true },
 
-    // Vaqt belgilari
     requestedAt: { type: DataTypes.DATE, defaultValue: DataTypes.NOW },
     acceptedAt: { type: DataTypes.DATE, allowNull: true },
     arrivedAt: { type: DataTypes.DATE, allowNull: true },
@@ -69,7 +71,6 @@ Trip.init(
     cancelledAt: { type: DataTypes.DATE, allowNull: true },
     cancellationReason: { type: DataTypes.STRING, allowNull: true },
 
-    // To'lov - faqat naqd
     paymentMethod: {
       type: DataTypes.ENUM('cash'),
       defaultValue: 'cash',
@@ -80,7 +81,6 @@ Trip.init(
       comment: 'Haydovchi naqd pul olganini tasdiqlagach true bo\'ladi',
     },
 
-    // Baholash
     clientRating: { type: DataTypes.INTEGER, allowNull: true, comment: 'Mijoz haydovchiga (1-5)' },
     driverRating: { type: DataTypes.INTEGER, allowNull: true, comment: 'Haydovchi mijozga (1-5)' },
     clientComment: { type: DataTypes.TEXT, allowNull: true },
