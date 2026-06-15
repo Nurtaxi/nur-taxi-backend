@@ -1,6 +1,6 @@
 const express = require('express');
 const { body } = require('express-validator');
-const { registerClient, registerDriver, login, getMe } = require('../controllers/authController');
+const { registerClient, registerDriver, login, getMe, updateProfile, changePassword } = require('../controllers/authController');
 const { authenticate } = require('../middleware/auth');
 const validate = require('../middleware/validate');
 
@@ -35,5 +35,18 @@ router.post(
 router.post('/login', [phoneValidator, body('password').notEmpty()], validate, login);
 
 router.get('/me', authenticate, getMe);
+
+router.patch('/me', authenticate, [body('fullName').optional().notEmpty()], validate, updateProfile);
+
+router.patch(
+  '/me/password',
+  authenticate,
+  [
+    body('currentPassword').notEmpty(),
+    body('newPassword').isLength({ min: 6 }).withMessage('Yangi parol kamida 6 belgidan iborat bo\'lishi kerak'),
+  ],
+  validate,
+  changePassword
+);
 
 module.exports = router;
