@@ -7,12 +7,6 @@ const {
 } = require('../services/pricingService');
 const { notifyNewTrip, notifyTripUpdate } = require('../services/socketService');
 
-/**
- * Mijoz yangi buyurtma so'rovi yaratadi.
- * Narx avtomatik hisoblanadi (masofa + vaqt bo'yicha).
- * POST /api/trips
- * body: { regionId, pickupLat, pickupLng, pickupAddress, dropoffLat, dropoffLng, dropoffAddress }
- */
 const createTrip = async (req, res, next) => {
   try {
     const {
@@ -25,7 +19,6 @@ const createTrip = async (req, res, next) => {
       dropoffAddress,
     } = req.body;
 
-    // Mijozning faol (tugamagan) buyurtmasi bormi - tekshirish
     const activeTrip = await Trip.findOne({
       where: { clientId: req.user.id },
       order: [['createdAt', 'DESC']],
@@ -40,10 +33,20 @@ const createTrip = async (req, res, next) => {
       return res.status(400).json({ success: false, message: 'Sizda allaqachon faol buyurtma mavjud' });
     }
 
-    const distanceKm = calculateDistanceKm(pickupLat, pickupLng, dropoffLat, dropoffLng);
-    const durationMin = estimateDurationMin(distanceKm);
+    const hasDestination = dropoffLat != null && dropoffLng != null;
     const tariff = await getTariffForRegion(regionId);
-    const estimatedPrice = calculatePrice({ distanceKm, durationMin, tariff });
+
+    let distanceKm = null;
+    let durationMin = null;
+    let estimatedPrice;
+
+    if (hasDestination) {
+      distanceKm = calculateDistanceKm(pickupLat, pickupLng, dropoffLat, dropoffLng);
+      durationMin = estimateDurationMin(distanceKm);
+      estimatedPrice = calculatePrice({ distanceKm, durationMin, tariff });
+    } else {
+      estimatedPrice = Number(tariff.minFare);
+    }
 
     const trip = await Trip.create({
       clientId: req.user.id,
@@ -51,16 +54,16 @@ const createTrip = async (req, res, next) => {
       pickupLat,
       pickupLng,
       pickupAddress,
-      dropoffLat,
-      dropoffLng,
-      dropoffAddress,
-      estimatedDistanceKm: distanceKm.toFixed(2),
-      estimatedDurationMin: durationMin.toFixed(2),
+      dropoffLat: hasDestination ? dropoffLat : null,
+      dropoffLng: hasDestination ? dropoffLng : null,
+      dropoffAddress: hasDestination ? dropoffAddress : null,
+      isDestinationPending: !hasDestination,
+      estimatedDistanceKm: distanceKm != null ? distanceKm.toFixed(2) : null,
+      estimatedDurationMin: durationMin != null ? durationMin.toFixed(2) : null,
       estimatedPrice,
       status: TRIP_STATUS.SEARCHING,
     });
 
-    // Shu hududdagi online haydovchilarga real-time xabar yuborish
     const io = req.app.get('io');
     if (io) notifyNewTrip(io, regionId, trip);
 
@@ -70,10 +73,6 @@ const createTrip = async (req, res, next) => {
   }
 };
 
-/**
- * Haydovchi buyurtmani qabul qiladi.
- * PATCH /api/trips/:id/accept
- */
 const acceptTrip = async (req, res, next) => {
   try {
     const trip = await Trip.findByPk(req.params.id);
@@ -98,7 +97,6 @@ const acceptTrip = async (req, res, next) => {
     driver.status = DRIVER_STATUS.ON_TRIP;
     await driver.save();
 
-    // Mijozga "haydovchi topildi" xabarini yuborish
     const io = req.app.get('io');
     if (io) notifyTripUpdate(io, trip.id, trip);
 
@@ -108,12 +106,6 @@ const acceptTrip = async (req, res, next) => {
   }
 };
 
-/**
- * Safar holatini o'zgartirish: arrived -> on_ride -> completed
- * yoki bekor qilish.
- * PATCH /api/trips/:id/status
- * body: { status: 'arrived' | 'on_ride' | 'completed' | 'cancelled_by_driver' | 'cancelled_by_client' }
- */
 const updateTripStatus = async (req, res, next) => {
   try {
     const { status } = req.body;
@@ -146,15 +138,12 @@ const updateTripStatus = async (req, res, next) => {
         trip.status = TRIP_STATUS.COMPLETED;
         trip.completedAt = now;
 
-        // Haqiqiy davomiylik va narx (real masofa GPS'dan kelishi kerak;
-        // hozircha estimated qiymatlarni final deb olamiz)
         const durationMs = trip.startedAt ? now - new Date(trip.startedAt) : 0;
         trip.actualDurationMin = (durationMs / 60000).toFixed(2);
         trip.actualDistanceKm = trip.estimatedDistanceKm;
         trip.finalPrice = trip.estimatedPrice;
-        trip.isPaid = true; // naqd, joyida to'landi
+        trip.isPaid = true;
 
-        // Haydovchini bo'shatish va statistikasini yangilash
         const driver = await Driver.findByPk(trip.driverId);
         if (driver) {
           driver.status = DRIVER_STATUS.ONLINE;
@@ -164,6 +153,13 @@ const updateTripStatus = async (req, res, next) => {
           const commission = (Number(trip.finalPrice) * Number(tariff.commissionPercent)) / 100;
           driver.balance = Number(driver.balance) - commission;
           await driver.save();
+        }
+
+        const client = await User.findByPk(trip.clientId);
+        if (client) {
+          const bonusEarned = Number(trip.finalPrice) * 0.01;
+          client.bonusBalance = Number(client.bonusBalance) + bonusEarned;
+          await client.save();
         }
         break;
       }
@@ -192,7 +188,6 @@ const updateTripStatus = async (req, res, next) => {
 
     await trip.save();
 
-    // Holat o'zgarishini ikkala tomonga (mijoz va haydovchi) yuborish
     const io = req.app.get('io');
     if (io) notifyTripUpdate(io, trip.id, trip);
 
@@ -202,11 +197,6 @@ const updateTripStatus = async (req, res, next) => {
   }
 };
 
-/**
- * Safarni baholash (mijoz tomonidan)
- * PATCH /api/trips/:id/rate
- * body: { rating: 1-5, comment }
- */
 const rateTrip = async (req, res, next) => {
   try {
     const { rating, comment } = req.body;
@@ -224,7 +214,6 @@ const rateTrip = async (req, res, next) => {
     trip.clientComment = comment || null;
     await trip.save();
 
-    // Haydovchining o'rtacha bahosini qayta hisoblash
     const driver = await Driver.findByPk(trip.driverId);
     if (driver) {
       const allRated = await Trip.findAll({
@@ -242,10 +231,6 @@ const rateTrip = async (req, res, next) => {
   }
 };
 
-/**
- * Mening safarlarim tarixi (mijoz yoki haydovchi)
- * GET /api/trips/my
- */
 const getMyTrips = async (req, res, next) => {
   try {
     let where = {};
@@ -265,10 +250,6 @@ const getMyTrips = async (req, res, next) => {
   }
 };
 
-/**
- * Bitta safar haqida to'liq ma'lumot
- * GET /api/trips/:id
- */
 const getTripById = async (req, res, next) => {
   try {
     const trip = await Trip.findByPk(req.params.id, {
@@ -289,11 +270,6 @@ const getTripById = async (req, res, next) => {
   }
 };
 
-/**
- * Hozir "searching" holatdagi buyurtmalar - online haydovchilarga ko'rsatish uchun.
- * Haydovchi o'z hududidagi kutilayotgan buyurtmalarni ko'radi.
- * GET /api/trips/available
- */
 const getAvailableTrips = async (req, res, next) => {
   try {
     const driver = await Driver.findOne({ where: { userId: req.user.id } });
