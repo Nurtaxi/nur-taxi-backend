@@ -89,7 +89,10 @@ const login = async (req, res, next) => {
 
 const getMe = async (req, res, next) => {
   try {
-    res.json({ success: true, data: req.user.toSafeJSON() });
+    const user = await User.findByPk(req.user.id, {
+      include: [{ association: 'region', include: ['tariff'] }],
+    });
+    res.json({ success: true, data: user.toSafeJSON() });
   } catch (err) {
     next(err);
   }
